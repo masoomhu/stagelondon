@@ -1,0 +1,47 @@
+name: Weekly Show Data Update
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      max_venues:
+        description: 'Max venues to scrape (0 = all)'
+        required: false
+        default: '0'
+
+jobs:
+  scrape-and-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run show scraper
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd scraper
+          VENUE_ARG=""
+          if [ "${{ github.event.inputs.max_venues }}" != "0" ] && [ -n "${{ github.event.inputs.max_venues }}" ]; then
+            VENUE_ARG="--venues ${{ github.event.inputs.max_venues }}"
+          fi
+          python3 scrape_shows.py $VENUE_ARG --commit
+
+      - name: Upload CSV artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: shows-data-${{ github.run_number }}
+          path: scraper/output/shows-data.csv
+          retention-days: 30
